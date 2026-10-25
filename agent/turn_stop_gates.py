@@ -79,6 +79,10 @@ def _pre_verify_nudge(agent, final_response, attempt: int) -> Optional[str]:
 def _kanban_stop_nudge(agent, messages) -> Optional[str]:
     """Workers must end with kanban_complete / kanban_block; a narrated stop is recorded
     as protocol_violation, so nudge once or twice first."""
+    # Delegated children share the worker's environment but return to its
+    # coordinator; they do not own the card and cannot call Kanban tools.
+    if getattr(agent, "_delegate_depth", 0) > 0:
+        return None
     try:
         from agent.kanban_stop import build_kanban_stop_nudge
 
