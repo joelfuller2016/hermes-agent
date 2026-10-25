@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from agent.kanban_stop import (
@@ -9,6 +11,7 @@ from agent.kanban_stop import (
     kanban_stop_nudge_enabled,
     session_called_kanban_terminal,
 )
+from agent.turn_stop_gates import apply_stop_gates
 
 
 @pytest.fixture
@@ -74,6 +77,32 @@ def test_no_nudge_after_kanban_complete(clear_kanban_env):
     assert build_kanban_stop_nudge(messages=messages) is None
 
 
+@pytest.mark.parametrize("depth", [0, 1, 2])
+def test_only_coordinator_must_complete_inherited_kanban_task(clear_kanban_env, depth):
+    clear_kanban_env.setenv("HERMES_KANBAN_TASK", "t_parent")
+    agent = SimpleNamespace(
+        _delegate_depth=depth,
+        _turn_file_mutation_paths=set(),
+        _interim_content_was_streamed=lambda _: False,
+        _emit_status=lambda _: None,
+    )
+    messages = [{"role": "user", "content": "Finish the assigned work."}]
+    answer = {"role": "assistant", "content": "Assigned work is complete."}
+    verdict = apply_stop_gates(
+        agent, answer, final_response=answer["content"], messages=messages,
+        conversation_history=None, pending_verification_response=None,
+        pending_verification_response_previewed=False,
+    )
+    if depth == 0:
+        assert verdict.continue_turn is True
+        assert [message["role"] for message in messages] == ["user", "assistant", "user"]
+        assert "t_parent" in messages[-1]["content"]
+    else:
+        assert verdict.continue_turn is False
+        assert verdict.final_response == answer["content"]
+        assert len(messages) == 1
+
+
 
 
 
@@ -84,7 +113,5 @@ def test_no_nudge_after_kanban_complete(clear_kanban_env):
 # without a terminal call, the dispatcher's bounded retry (streak of 3)
 # handles it.  See also tests/hermes_cli/test_kanban_core_functionality.py
 # for the dispatcher-side streak tests.
-
-
 
 

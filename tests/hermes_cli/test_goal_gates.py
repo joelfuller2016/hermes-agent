@@ -64,8 +64,11 @@ def test_run_gate_pass():
     assert "hello" in out
 
 
-def test_run_gate_fail_captures_output():
-    passed, code, out = run_gate(GoalGate(command="echo broken >&2; exit 3"))
+def test_run_gate_fail_captures_output(tmp_path):
+    # Exercise an actual failing process on both Windows and POSIX shells.
+    script = tmp_path / "failing_gate.py"
+    script.write_text("import sys\nprint('broken', file=sys.stderr)\nsys.exit(3)\n", encoding="utf-8")
+    passed, code, out = run_gate(GoalGate(command=f'"{sys.executable}" "{script}"'))
     assert passed is False
     assert code == 3
     assert "broken" in out
